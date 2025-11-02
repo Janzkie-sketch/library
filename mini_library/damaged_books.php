@@ -2,7 +2,7 @@
 session_start();
 include "db.php";
 
-// ✅ AJAX FETCH DATA
+// ✅ FETCH TABLE DATA (AJAX)
 if (isset($_GET['action']) && $_GET['action'] == 'fetch') {
   $query = isset($_GET['query']) ? trim($_GET['query']) : '';
   $sql = "SELECT * FROM damage_books";
@@ -25,7 +25,7 @@ if (isset($_GET['action']) && $_GET['action'] == 'fetch') {
               <th>Author</th>
               <th>ISBN</th>
               <th>Publisher</th>
-              <th>Year</th>
+              <th>Year Published</th>
               <th>Copies</th>
               <th>Issue</th>
               <th>Actions</th>
@@ -87,28 +87,30 @@ if (isset($_GET['edit'])) {
   }
 }
 
-// ✅ ADD or UPDATE
+// ✅ ADD or UPDATE RECORD
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
   $id = $_POST['id'];
-  $title = $_POST['title'];
-  $author = $_POST['author'];
-  $isbn = $_POST['isbn'];
-  $publisher = $_POST['publisher'];
-  $year = $_POST['year'];
-  $copies = $_POST['copies'];
-  $issue = $_POST['issue'];
+  $title = trim($_POST['title']);
+  $author = trim($_POST['author']);
+  $isbn = trim($_POST['isbn']);
+  $publisher = trim($_POST['publisher']);
+  $copies = intval($_POST['copies']);
+  $issue = trim($_POST['issue']);
+
+  // Properly handle date
+  $year = !empty($_POST['year']) ? $_POST['year'] : NULL;
 
   if (!empty($id)) {
     $stmt = $conn->prepare("UPDATE damage_books 
                             SET book_title=?, author=?, isbn=?, publisher=?, year_published=?, available_copies=?, book_issue=?
                             WHERE id=?");
-    $stmt->bind_param("ssssissi", $title, $author, $isbn, $publisher, $year, $copies, $issue, $id);
+    $stmt->bind_param("sssssssi", $title, $author, $isbn, $publisher, $year, $copies, $issue, $id);
     $stmt->execute();
     echo "updated";
   } else {
     $stmt = $conn->prepare("INSERT INTO damage_books (book_title, author, isbn, publisher, year_published, available_copies, book_issue)
                             VALUES (?, ?, ?, ?, ?, ?, ?)");
-    $stmt->bind_param("ssssiss", $title, $author, $isbn, $publisher, $year, $copies, $issue);
+    $stmt->bind_param("sssssis", $title, $author, $isbn, $publisher, $year, $copies, $issue);
     $stmt->execute();
     echo "saved";
   }
@@ -135,7 +137,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
       background: #fae1e1ff;
       display: flex;
     }
-
   </style>
 </head>
 <body>
@@ -147,30 +148,39 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
   <form id="bookForm" method="POST" class="damaged-form">
     <input type="hidden" name="id" value="<?= htmlspecialchars($id); ?>">
+
     <div class="form-group">
       <label>Book Title</label>
       <input type="text" name="title" value="<?= htmlspecialchars($title); ?>" required>
     </div>
+
     <div class="form-group">
       <label>Author</label>
       <input type="text" name="author" value="<?= htmlspecialchars($author); ?>" required>
     </div>
+
     <div class="form-group">
       <label>ISBN</label>
       <input type="number" id="isbn" name="isbn" value="<?= htmlspecialchars($isbn); ?>" placeholder="Enter 5-digit ISBN" required>
     </div>
+
     <div class="form-group">
       <label>Publisher</label>
       <input type="text" name="publisher" value="<?= htmlspecialchars($publisher); ?>" required>
     </div>
+
     <div class="form-group">
       <label>Year Published</label>
-      <input type="date" id="year" name="year" value="<?= htmlspecialchars($year); ?>" required>
+      <input type="date" id="year" name="year"
+             value="<?= !empty($year) ? htmlspecialchars($year) : date('Y-m-d'); ?>"
+             required>
     </div>
+
     <div class="form-group">
       <label>Available Copies</label>
       <input type="number" name="copies" value="<?= htmlspecialchars($copies); ?>" required>
     </div>
+
     <div class="form-group">
       <label>Book Issue</label>
       <textarea name="issue" rows="4" required><?= htmlspecialchars($issue); ?></textarea>
@@ -203,13 +213,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if (this.value.length > 5) this.value = this.value.slice(0, 5);
   });
 
-  // ✅ Year input adjustment
-  const yearPicker = document.getElementById("year");
-  yearPicker.addEventListener("change", function() {
-    const date = new Date(this.value);
-    this.value = `${date.getFullYear()}-01-01`;
-  });
-
   // ✅ Load all books
   function loadBooks(query = "") {
     $.get("damaged_books.php", { action: "fetch", query: query }, function(data) {
@@ -224,7 +227,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
   $(document).ready(function() {
     loadBooks();
 
-    // ✅ Add/Edit with SweetAlert
+    // ✅ Add/Edit record with SweetAlert
     $("#bookForm").on("submit", function(e) {
       e.preventDefault();
       $.ajax({
@@ -249,7 +252,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
       });
     });
 
-    // ✅ Delete confirmation SweetAlert
+    // ✅ Delete confirmation
     $(document).on("click", ".btn-delete", function() {
       const id = $(this).data("id");
       Swal.fire({
@@ -278,7 +281,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
       });
     });
 
-    // ✅ Edit button redirects normally
+    // ✅ Edit redirect
     $(document).on("click", ".btn-edit", function() {
       const id = $(this).data("id");
       window.location.href = "damaged_books.php?edit=" + id;
